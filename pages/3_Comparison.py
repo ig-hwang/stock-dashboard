@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import _nav
 from db import (
     SYMBOL_NAMES, TIMEFRAME_DAYS,
     compute_overall_signal, detect_signals,
@@ -17,8 +18,11 @@ COLORS = [
     "#ef5350", "#66bb6a", "#42a5f5", "#ffa726",
 ]
 
+st.set_page_config(page_title="AlphaBoard — 종목 비교", page_icon="⚖️", layout="wide")
+_nav.inject()
+
 with st.sidebar:
-    st.header("종목 비교 설정")
+    _nav.section("종목 선택")
     all_syms = load_symbols()
     if not all_syms:
         st.warning("데이터 없음.")
@@ -31,15 +35,21 @@ with st.sidebar:
         default=default_syms,
         format_func=lambda s: f"{s} — {SYMBOL_NAMES.get(s, s)}",
         max_selections=5,
+        label_visibility="collapsed",
     )
-    timeframe = st.select_slider("기간", options=list(TIMEFRAME_DAYS.keys()), value="1Y")
-    normalize  = st.checkbox("수익률 정규화 (100 기준)", value=True)
-
-    if st.button("🔄 새로고침", use_container_width=True):
+    _nav.section("차트 설정")
+    timeframe = st.select_slider(
+        "기간", options=list(TIMEFRAME_DAYS.keys()), value="1Y",
+        label_visibility="collapsed",
+    )
+    normalize = st.checkbox("수익률 정규화 (100 기준)", value=True)
+    st.divider()
+    if st.button("↺  새로고침", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
+    _nav.status_bar("상대 수익률 · 기술적 비교")
 
-st.title("⚖️ 종목 비교 분석")
+st.header("종목 비교 분석", divider="blue")
 
 if len(selected) < 2:
     st.info("사이드바에서 2개 이상의 종목을 선택하세요.")
