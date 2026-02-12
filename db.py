@@ -162,12 +162,15 @@ CREATE INDEX IF NOT EXISTS idx_digest_week_start ON weekly_digest (week_start DE
 
 
 def _ensure_schema(engine) -> None:
-    """Create all tables if they don't exist yet (idempotent)."""
+    """Create all tables if they don't exist yet (idempotent).
+    Checks table existence first — skips DDL on subsequent starts."""
     with engine.begin() as conn:
-        for stmt in _DDL.strip().split(";"):
-            stmt = stmt.strip()
-            if stmt:
-                conn.execute(text(stmt))
+        exists = conn.exec_driver_sql(
+            "SELECT 1 FROM pg_tables "
+            "WHERE schemaname='public' AND tablename='stock_prices'"
+        ).fetchone()
+        if not exists:
+            conn.exec_driver_sql(_DDL)
 
 
 @st.cache_resource
