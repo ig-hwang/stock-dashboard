@@ -52,7 +52,24 @@ TIMEFRAME_DAYS = {
     "1Y": 365, "2Y": 730, "3Y": 1095,
 }
 
-# ── DB connection ────────────────────────────────────────────────────────────
+# ── DB helpers ───────────────────────────────────────────────────────────────
+
+def _df(result) -> pd.DataFrame:
+    """Build DataFrame from a SQLAlchemy CursorResult.
+
+    psycopg2 returns PostgreSQL NUMERIC as Python Decimal — convert all
+    numeric-looking object columns to float64 so Plotly & pandas work correctly.
+    """
+    df = pd.DataFrame(result.fetchall(), columns=list(result.keys()))
+    for col in df.columns:
+        if df[col].dtype == object:
+            converted = pd.to_numeric(df[col], errors="ignore")
+            if converted.dtype != object:        # conversion succeeded
+                df[col] = converted
+    return df
+
+
+# ── DB connection ─────────────────────────────────────────────────────────────
 
 @st.cache_resource
 def get_engine():
@@ -105,7 +122,7 @@ def load_prices(symbol: str, days: int) -> pd.DataFrame:
             """),
             {"symbol": symbol, "days": days},
         )
-        df = pd.DataFrame(result.fetchall(), columns=list(result.keys()))
+        df = _df(result)
     df["trade_date"] = pd.to_datetime(df["trade_date"])
     return df
 
@@ -155,7 +172,7 @@ def load_overview_data() -> pd.DataFrame:
             ) d365 ON true
             ORDER BY l.symbol
         """))
-        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
+        return _df(result)
 
 
 @st.cache_data(ttl=3600)
@@ -170,7 +187,7 @@ def load_fundamentals(symbol: str) -> pd.DataFrame:
             """),
             {"symbol": symbol},
         )
-        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
+        return _df(result)
 
 
 @st.cache_data(ttl=300)
@@ -199,7 +216,7 @@ def load_news(symbol: str = None, limit: int = 60) -> pd.DataFrame:
                 """),
                 {"limit": limit},
             )
-        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
+        return _df(result)
 
 
 @st.cache_data(ttl=300)
@@ -219,7 +236,7 @@ def load_multi_prices(symbols: tuple, days: int) -> pd.DataFrame:
                 bindparam("days", value=days),
             ),
         )
-        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
+        return _df(result)
 
 
 @st.cache_data(ttl=600)
@@ -235,7 +252,7 @@ def load_weekly_digests(limit: int = 12) -> pd.DataFrame:
             """),
             {"limit": limit},
         )
-        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
+        return _df(result)
 
 
 # ── Signal detection ─────────────────────────────────────────────────────────
