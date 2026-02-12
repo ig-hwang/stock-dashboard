@@ -56,18 +56,27 @@ TIMEFRAME_DAYS = {
 
 @st.cache_resource
 def get_engine():
-    # Streamlit Community Cloud: read from st.secrets
-    # Local Docker: fall back to environment variable
+    # Priority: st.secrets (Streamlit Cloud) → env var (local Docker)
+    conn_str = None
     try:
         conn_str = st.secrets["DATA_DB_CONN"]
-    except (KeyError, FileNotFoundError):
-        conn_str = os.environ["DATA_DB_CONN"]
+    except Exception:
+        pass
+    if not conn_str:
+        conn_str = os.environ.get("DATA_DB_CONN")
+    if not conn_str:
+        st.error(
+            "**DB 연결 정보가 없습니다.**\n\n"
+            "Streamlit Cloud: Manage app → Edit secrets 에 아래 추가:\n"
+            "```toml\nDATA_DB_CONN = \"postgresql://...\"\n```"
+        )
+        st.stop()
     return create_engine(
         conn_str,
         pool_pre_ping=True,
         pool_size=2,
         max_overflow=3,
-        future=False,  # SQLAlchemy 1.4 legacy mode
+        future=False,
     )
 
 
