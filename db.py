@@ -76,7 +76,6 @@ def get_engine():
         pool_pre_ping=True,
         pool_size=2,
         max_overflow=3,
-        future=False,
     )
 
 
@@ -92,7 +91,7 @@ def load_symbols() -> list[str]:
 @st.cache_data(ttl=300)
 def load_prices(symbol: str, days: int) -> pd.DataFrame:
     with get_engine().connect() as conn:
-        df = pd.read_sql(
+        result = conn.execute(
             text("""
                 SELECT trade_date, open, high, low, close, volume,
                        sma_20, sma_50, sma_200,
@@ -104,9 +103,9 @@ def load_prices(symbol: str, days: int) -> pd.DataFrame:
                   AND trade_date >= CURRENT_DATE - :days * INTERVAL '1 day'
                 ORDER BY trade_date
             """),
-            conn,
-            params={"symbol": symbol, "days": days},
+            {"symbol": symbol, "days": days},
         )
+        df = pd.DataFrame(result.fetchall(), columns=list(result.keys()))
     df["trade_date"] = pd.to_datetime(df["trade_date"])
     return df
 
@@ -115,73 +114,70 @@ def load_prices(symbol: str, days: int) -> pd.DataFrame:
 def load_overview_data() -> pd.DataFrame:
     """Single query: latest price + 1D/1W/1M/1Y returns + key indicators for all symbols."""
     with get_engine().connect() as conn:
-        df = pd.read_sql(
-            text("""
-                SELECT
-                    l.symbol,
-                    l.close                                                                 AS price,
-                    l.rsi_14, l.macd, l.macd_signal,
-                    l.sma_50, l.sma_200,
-                    l.bb_upper, l.bb_lower, l.bb_middle,
-                    l.mfi_14,
-                    ROUND((l.close - d1.close)   / NULLIF(d1.close,   0) * 100, 2)        AS ret_1d,
-                    ROUND((l.close - d7.close)   / NULLIF(d7.close,   0) * 100, 2)        AS ret_1w,
-                    ROUND((l.close - d30.close)  / NULLIF(d30.close,  0) * 100, 2)        AS ret_1m,
-                    ROUND((l.close - d365.close) / NULLIF(d365.close, 0) * 100, 2)        AS ret_1y
-                FROM (
-                    SELECT DISTINCT ON (symbol)
-                        symbol, close, rsi_14, macd, macd_signal,
-                        sma_50, sma_200, bb_upper, bb_lower, bb_middle, mfi_14
-                    FROM stock_prices
-                    ORDER BY symbol, trade_date DESC
-                ) l
-                LEFT JOIN LATERAL (
-                    SELECT close FROM stock_prices
-                    WHERE symbol = l.symbol AND trade_date <= CURRENT_DATE - INTERVAL '1 day'
-                    ORDER BY trade_date DESC LIMIT 1
-                ) d1 ON true
-                LEFT JOIN LATERAL (
-                    SELECT close FROM stock_prices
-                    WHERE symbol = l.symbol AND trade_date <= CURRENT_DATE - INTERVAL '7 days'
-                    ORDER BY trade_date DESC LIMIT 1
-                ) d7 ON true
-                LEFT JOIN LATERAL (
-                    SELECT close FROM stock_prices
-                    WHERE symbol = l.symbol AND trade_date <= CURRENT_DATE - INTERVAL '30 days'
-                    ORDER BY trade_date DESC LIMIT 1
-                ) d30 ON true
-                LEFT JOIN LATERAL (
-                    SELECT close FROM stock_prices
-                    WHERE symbol = l.symbol AND trade_date <= CURRENT_DATE - INTERVAL '365 days'
-                    ORDER BY trade_date DESC LIMIT 1
-                ) d365 ON true
-                ORDER BY l.symbol
-            """),
-            conn,
-        )
-    return df
+        result = conn.execute(text("""
+            SELECT
+                l.symbol,
+                l.close                                                                 AS price,
+                l.rsi_14, l.macd, l.macd_signal,
+                l.sma_50, l.sma_200,
+                l.bb_upper, l.bb_lower, l.bb_middle,
+                l.mfi_14,
+                ROUND((l.close - d1.close)   / NULLIF(d1.close,   0) * 100, 2)        AS ret_1d,
+                ROUND((l.close - d7.close)   / NULLIF(d7.close,   0) * 100, 2)        AS ret_1w,
+                ROUND((l.close - d30.close)  / NULLIF(d30.close,  0) * 100, 2)        AS ret_1m,
+                ROUND((l.close - d365.close) / NULLIF(d365.close, 0) * 100, 2)        AS ret_1y
+            FROM (
+                SELECT DISTINCT ON (symbol)
+                    symbol, close, rsi_14, macd, macd_signal,
+                    sma_50, sma_200, bb_upper, bb_lower, bb_middle, mfi_14
+                FROM stock_prices
+                ORDER BY symbol, trade_date DESC
+            ) l
+            LEFT JOIN LATERAL (
+                SELECT close FROM stock_prices
+                WHERE symbol = l.symbol AND trade_date <= CURRENT_DATE - INTERVAL '1 day'
+                ORDER BY trade_date DESC LIMIT 1
+            ) d1 ON true
+            LEFT JOIN LATERAL (
+                SELECT close FROM stock_prices
+                WHERE symbol = l.symbol AND trade_date <= CURRENT_DATE - INTERVAL '7 days'
+                ORDER BY trade_date DESC LIMIT 1
+            ) d7 ON true
+            LEFT JOIN LATERAL (
+                SELECT close FROM stock_prices
+                WHERE symbol = l.symbol AND trade_date <= CURRENT_DATE - INTERVAL '30 days'
+                ORDER BY trade_date DESC LIMIT 1
+            ) d30 ON true
+            LEFT JOIN LATERAL (
+                SELECT close FROM stock_prices
+                WHERE symbol = l.symbol AND trade_date <= CURRENT_DATE - INTERVAL '365 days'
+                ORDER BY trade_date DESC LIMIT 1
+            ) d365 ON true
+            ORDER BY l.symbol
+        """))
+        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
 
 
 @st.cache_data(ttl=3600)
 def load_fundamentals(symbol: str) -> pd.DataFrame:
     with get_engine().connect() as conn:
-        return pd.read_sql(
+        result = conn.execute(
             text("""
                 SELECT * FROM stock_fundamentals
                 WHERE symbol = :symbol
                 ORDER BY fetch_date DESC
                 LIMIT 1
             """),
-            conn,
-            params={"symbol": symbol},
+            {"symbol": symbol},
         )
+        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
 
 
 @st.cache_data(ttl=300)
 def load_news(symbol: str = None, limit: int = 60) -> pd.DataFrame:
     with get_engine().connect() as conn:
         if symbol:
-            return pd.read_sql(
+            result = conn.execute(
                 text("""
                     SELECT title, source, published, url, summary, symbol,
                            ai_summary, sentiment
@@ -190,53 +186,56 @@ def load_news(symbol: str = None, limit: int = 60) -> pd.DataFrame:
                     ORDER BY published DESC NULLS LAST
                     LIMIT :limit
                 """),
-                conn,
-                params={"symbol": symbol, "limit": limit},
+                {"symbol": symbol, "limit": limit},
             )
-        return pd.read_sql(
-            text("""
-                SELECT title, source, published, url, summary, symbol,
-                       ai_summary, sentiment
-                FROM stock_news
-                ORDER BY published DESC NULLS LAST
-                LIMIT :limit
-            """),
-            conn,
-            params={"limit": limit},
-        )
+        else:
+            result = conn.execute(
+                text("""
+                    SELECT title, source, published, url, summary, symbol,
+                           ai_summary, sentiment
+                    FROM stock_news
+                    ORDER BY published DESC NULLS LAST
+                    LIMIT :limit
+                """),
+                {"limit": limit},
+            )
+        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
 
 
 @st.cache_data(ttl=300)
 def load_multi_prices(symbols: tuple, days: int) -> pd.DataFrame:
     """Load prices for multiple symbols — used by Comparison page."""
+    from sqlalchemy import ARRAY, String, bindparam
     with get_engine().connect() as conn:
-        return pd.read_sql(
+        result = conn.execute(
             text("""
                 SELECT symbol, trade_date, close
                 FROM stock_prices
                 WHERE symbol = ANY(:syms)
                   AND trade_date >= CURRENT_DATE - :days * INTERVAL '1 day'
                 ORDER BY symbol, trade_date
-            """),
-            conn,
-            params={"syms": list(symbols), "days": days},
+            """).bindparams(
+                bindparam("syms", value=list(symbols), type_=ARRAY(String)),
+                bindparam("days", value=days),
+            ),
         )
+        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
 
 
 @st.cache_data(ttl=600)
 def load_weekly_digests(limit: int = 12) -> pd.DataFrame:
     """Load recent weekly digests ordered newest first."""
     with get_engine().connect() as conn:
-        return pd.read_sql(
+        result = conn.execute(
             text("""
                 SELECT week_start, week_end, headline, content, created_at
                 FROM weekly_digest
                 ORDER BY week_start DESC
                 LIMIT :limit
             """),
-            conn,
-            params={"limit": limit},
+            {"limit": limit},
         )
+        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
 
 
 # ── Signal detection ─────────────────────────────────────────────────────────
