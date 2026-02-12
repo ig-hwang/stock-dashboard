@@ -67,6 +67,7 @@ def get_engine():
         pool_pre_ping=True,
         pool_size=2,
         max_overflow=3,
+        future=False,  # SQLAlchemy 1.4 legacy mode
     )
 
 
