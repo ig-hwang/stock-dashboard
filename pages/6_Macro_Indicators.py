@@ -14,7 +14,7 @@ from db import MACRO_LABELS, load_macro_data
 # ── 시리즈 그룹 정의 ───────────────────────────────────────────────────────────
 
 GROUPS = {
-    "📊 주요 지수":    ["SP500", "Nasdaq100", "DowJones", "KOSPI", "KOSDAQ"],
+    "📊 주요 지수":    ["SP500", "Nasdaq100", "DowJones", "KOSPI", "KOSDAQ", "VIX"],
     "💱 환율 · 원자재": ["DXY", "USD_KRW", "WTI_Oil", "Gold", "Silver", "Copper"],
     "💰 암호화폐":     ["Bitcoin", "Ethereum"],
     "🏦 금리 · 채권":  ["US10Y", "US2Y", "YieldCurve", "HighYield_Spread", "M2_Supply"],
