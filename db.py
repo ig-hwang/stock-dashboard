@@ -198,6 +198,18 @@ CREATE TABLE IF NOT EXISTS chart_generation_log (
     UNIQUE (symbol, chart_date)
 );
 
+CREATE TABLE IF NOT EXISTS macro_indicators (
+    id          SERIAL PRIMARY KEY,
+    series_key  VARCHAR(50)  NOT NULL,
+    trade_date  DATE         NOT NULL,
+    value       NUMERIC(20, 6),
+    created_at  TIMESTAMP   DEFAULT NOW(),
+    updated_at  TIMESTAMP   DEFAULT NOW(),
+    UNIQUE (series_key, trade_date)
+);
+CREATE INDEX IF NOT EXISTS idx_macro_series ON macro_indicators (series_key);
+CREATE INDEX IF NOT EXISTS idx_macro_date   ON macro_indicators (trade_date DESC);
+
 CREATE TABLE IF NOT EXISTS weekly_digest (
     id         SERIAL PRIMARY KEY,
     week_start DATE         NOT NULL UNIQUE,
@@ -391,6 +403,52 @@ def load_multi_prices(symbols: tuple, days: int) -> pd.DataFrame:
             ),
         )
         return _df(result)
+
+
+MACRO_LABELS = {
+    "SP500": "S&P 500", "Nasdaq100": "Nasdaq 100", "DowJones": "Dow Jones",
+    "KOSPI": "KOSPI", "KOSDAQ": "KOSDAQ",
+    "DXY": "달러 인덱스", "USD_KRW": "USD/KRW",
+    "WTI_Oil": "WTI 원유", "Gold": "금", "Silver": "은", "Copper": "구리",
+    "Bitcoin": "Bitcoin", "Ethereum": "Ethereum", "VIX": "VIX",
+    "US10Y": "미국 10년물", "US2Y": "미국 2년물", "YieldCurve": "장단기 스프레드",
+    "M2_Supply": "M2 통화량", "HighYield_Spread": "하이일드 스프레드",
+}
+
+
+@st.cache_data(ttl=300)
+def load_macro_data(series_keys: list[str] | None = None, days: int = 365) -> pd.DataFrame:
+    """Return macro indicators in wide format (date index, series as columns)."""
+    from sqlalchemy import ARRAY, String, bindparam
+    with get_engine().connect() as conn:
+        if series_keys:
+            result = conn.execute(
+                text("""
+                    SELECT series_key, trade_date, value
+                    FROM macro_indicators
+                    WHERE series_key = ANY(:keys)
+                      AND trade_date >= CURRENT_DATE - :days * INTERVAL '1 day'
+                    ORDER BY trade_date
+                """).bindparams(
+                    bindparam("keys", value=list(series_keys), type_=ARRAY(String)),
+                    bindparam("days", value=days),
+                ),
+            )
+        else:
+            result = conn.execute(
+                text("""
+                    SELECT series_key, trade_date, value
+                    FROM macro_indicators
+                    WHERE trade_date >= CURRENT_DATE - :days * INTERVAL '1 day'
+                    ORDER BY trade_date
+                """),
+                {"days": days},
+            )
+        df = _df(result)
+    if df.empty:
+        return df
+    df["trade_date"] = pd.to_datetime(df["trade_date"])
+    return df.pivot(index="trade_date", columns="series_key", values="value").sort_index()
 
 
 @st.cache_data(ttl=600)
