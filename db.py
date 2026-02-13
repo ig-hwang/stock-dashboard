@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, text
 # ── Symbol metadata ─────────────────────────────────────────────────────────
 
 SYMBOL_NAMES = {
+    # 기존 테마주
     "AVGO": "Broadcom",
     "BE": "Bloom Energy",
     "VRT": "Vertiv Holdings",
@@ -25,21 +26,70 @@ SYMBOL_NAMES = {
     "LITE": "Lumentum",
     "VST": "Vistra Energy",
     "ETN": "Eaton",
+    # 빅테크
+    "AAPL": "Apple",
+    "MSFT": "Microsoft",
+    "AMZN": "Amazon",
+    "NVDA": "NVIDIA",
+    "META": "Meta",
+    "GOOGL": "Alphabet",
+    # 금융/헬스케어/소비재
+    "BRK-B": "Berkshire Hathaway",
+    "JPM": "JPMorgan Chase",
+    "UNH": "UnitedHealth",
+    "JNJ": "Johnson & Johnson",
+    "LLY": "Eli Lilly",
+    "PFE": "Pfizer",
+    "MRK": "Merck",
+    "ABBV": "AbbVie",
+    "AMGN": "Amgen",
+    "ISRG": "Intuitive Surgical",
+    "PEP": "PepsiCo",
+    "KO": "Coca-Cola",
+    "VZ": "Verizon",
+    "CSCO": "Cisco",
+    # 반도체/소재
+    "AMD": "AMD",
+    "MU": "Micron Technology",
+    "AMAT": "Applied Materials",
+    "MP": "MP Materials",
+    # 글로벌 (US 거래소 상장)
+    "TSM": "TSMC",
+    "ASML": "ASML",
+    "ABB": "ABB",
+    # 한국
     "267260.KS": "HD현대일렉트릭",
     "034020.KS": "두산에너빌리티",
     "028260.KS": "삼성물산",
     "267270.KS": "HD현대중공업",
     "010120.KS": "LS ELECTRIC",
+    # ADR
     "SBGSY": "Schneider Electric",
     "HTHIY": "Hitachi",
+    "FANUY": "Fanuc",
+    "KYOCY": "Keyence",
+    "SMCAY": "SMC Corp",
 }
 
 SYMBOL_CATEGORY = {
+    # 기존 테마주
     "AVGO": "US", "BE": "US", "VRT": "US", "SMR": "US", "OKLO": "US",
     "GEV": "US", "MRVL": "US", "COHR": "US", "LITE": "US", "VST": "US", "ETN": "US",
+    # 빅테크
+    "AAPL": "US", "MSFT": "US", "AMZN": "US", "NVDA": "US", "META": "US", "GOOGL": "US",
+    # 금융/헬스케어/소비재
+    "BRK-B": "US", "JPM": "US", "UNH": "US", "JNJ": "US", "LLY": "US",
+    "PFE": "US", "MRK": "US", "ABBV": "US", "AMGN": "US", "ISRG": "US",
+    "PEP": "US", "KO": "US", "VZ": "US", "CSCO": "US",
+    # 반도체/소재
+    "AMD": "US", "MU": "US", "AMAT": "US", "MP": "US",
+    # 글로벌 (US 거래소 상장)
+    "TSM": "US", "ASML": "US", "ABB": "US",
+    # 한국
     "267260.KS": "KR", "034020.KS": "KR", "028260.KS": "KR",
     "267270.KS": "KR", "010120.KS": "KR",
-    "SBGSY": "ADR", "HTHIY": "ADR",
+    # ADR
+    "SBGSY": "ADR", "HTHIY": "ADR", "FANUY": "ADR", "KYOCY": "ADR", "SMCAY": "ADR",
 }
 
 US_SYMBOLS  = [s for s, c in SYMBOL_CATEGORY.items() if c == "US"]
