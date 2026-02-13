@@ -288,91 +288,85 @@ with tabs[-1]:
 
         st.divider()
 
-        col_left, col_right = st.columns(2)
-
         # ── 2. 월별 수익률 (z-score 정규화) ──────────────────────────────────
-        with col_left:
-            st.subheader("📅 월별 수익률")
-            st.caption("행 z-score 정규화 — 각 지표의 자기 변동성 대비 얼마나 이상한 달이었나")
+        st.subheader("📅 월별 수익률")
+        st.caption("행 z-score 정규화 — 각 지표의 자기 변동성 대비 얼마나 이상한 달이었나 · 셀 내 텍스트는 실제 수익률(%)")
 
-            monthly     = df_hm[avail_cat].resample("ME").last()
-            monthly_ret = (monthly.pct_change() * 100).iloc[1:]
-            valid_cols  = [c for c in monthly_ret.columns if monthly_ret[c].notna().sum() >= 3]
-            monthly_ret = monthly_ret[valid_cols]
+        monthly     = df_hm[avail_cat].resample("ME").last()
+        monthly_ret = (monthly.pct_change() * 100).iloc[1:]
+        valid_cols  = [c for c in monthly_ret.columns if monthly_ret[c].notna().sum() >= 3]
+        monthly_ret = monthly_ret[valid_cols]
 
-            # z-score 정규화: BTC±30%와 M2±0.3%를 같은 척도로
-            monthly_z = monthly_ret.apply(
-                lambda col: (col - col.mean()) / col.std() if col.std() > 0 else col * 0
-            )
+        monthly_z = monthly_ret.apply(
+            lambda col: (col - col.mean()) / col.std() if col.std() > 0 else col * 0
+        )
 
-            zm_y      = [MACRO_LABELS.get(c, c) for c in monthly_z.columns]
-            zm_x      = [d.strftime("%y/%m") for d in monthly_z.index]
-            zm_raw    = monthly_ret[valid_cols].T.values  # 원래 % 값 (hover용)
+        zm_y  = [MACRO_LABELS.get(c, c) for c in monthly_z.columns]
+        zm_x  = [d.strftime("%y/%m") for d in monthly_z.index]
+        text_z = [
+            [f"{monthly_ret[c].iloc[j]:+.1f}%" if pd.notna(monthly_ret[c].iloc[j]) else ""
+             for j in range(len(monthly_z))]
+            for c in valid_cols
+        ]
 
-            text_z = [
-                [f"{monthly_ret[c].iloc[j]:+.1f}%" if pd.notna(monthly_ret[c].iloc[j]) else ""
-                 for j in range(len(monthly_z))]
-                for c in valid_cols
-            ]
+        fig_z = go.Figure(go.Heatmap(
+            z=monthly_z.T.values.tolist(),
+            x=zm_x,
+            y=zm_y,
+            colorscale="RdYlGn",
+            zmid=0, zmin=-3, zmax=3,
+            text=text_z,
+            texttemplate="%{text}",
+            textfont={"size": 10},
+            hoverongaps=False,
+            colorbar=dict(title="z-score", thickness=16, len=0.95),
+        ))
+        fig_z.update_layout(
+            height=len(zm_y) * 38 + 80,
+            template="plotly_dark",
+            plot_bgcolor="#0e1117",
+            paper_bgcolor="#0e1117",
+            margin=dict(l=10, r=10, t=10, b=60),
+            xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=11)),
+            yaxis=dict(showgrid=False, tickfont=dict(size=12)),
+        )
+        st.plotly_chart(fig_z, use_container_width=True)
 
-            fig_z = go.Figure(go.Heatmap(
-                z=monthly_z.T.values.tolist(),
-                x=zm_x,
-                y=zm_y,
-                colorscale="RdYlGn",
-                zmid=0, zmin=-3, zmax=3,
-                text=text_z,
-                texttemplate="%{text}",
-                textfont={"size": 8},
-                hoverongaps=False,
-                colorbar=dict(title="z-score", thickness=12),
-            ))
-            fig_z.update_layout(
-                height=max(360, len(zm_y) * 25 + 60),
-                template="plotly_dark",
-                plot_bgcolor="#0e1117",
-                paper_bgcolor="#0e1117",
-                margin=dict(l=10, r=10, t=10, b=10),
-                xaxis=dict(showgrid=False, tickangle=-60),
-                yaxis=dict(showgrid=False),
-            )
-            st.plotly_chart(fig_z, use_container_width=True)
+        st.divider()
 
         # ── 3. 상관관계 매트릭스 ──────────────────────────────────────────────
-        with col_right:
-            st.subheader("🔗 상관관계 매트릭스")
-            st.caption("일간 수익률 기준 · 카테고리 정렬 · |r|≥0.5 셀만 수치 표시")
+        st.subheader("🔗 상관관계 매트릭스")
+        st.caption("일간 수익률 기준 · 카테고리 정렬 · |r|≥0.5 셀만 수치 표시")
 
-            ret  = df_hm[avail_cat].pct_change().dropna(how="all")
-            corr = ret.corr().loc[avail_cat, avail_cat]
-            c_labels = [MACRO_LABELS.get(c, c) for c in avail_cat]
+        ret  = df_hm[avail_cat].pct_change().dropna(how="all")
+        corr = ret.corr().loc[avail_cat, avail_cat]
+        c_labels = [MACRO_LABELS.get(c, c) for c in avail_cat]
 
-            # |r| >= 0.5 인 셀만 텍스트 표시, 나머지는 빈칸
-            text_c = [
-                [f"{corr.iloc[i, j]:.2f}" if abs(corr.iloc[i, j]) >= 0.5 else ""
-                 for j in range(len(avail_cat))]
-                for i in range(len(avail_cat))
-            ]
+        text_c = [
+            [f"{corr.iloc[i, j]:.2f}" if abs(corr.iloc[i, j]) >= 0.5 else ""
+             for j in range(len(avail_cat))]
+            for i in range(len(avail_cat))
+        ]
 
-            fig_c = go.Figure(go.Heatmap(
-                z=corr.values.tolist(),
-                x=c_labels,
-                y=c_labels,
-                colorscale="RdBu_r",
-                zmin=-1, zmax=1,
-                text=text_c,
-                texttemplate="%{text}",
-                textfont={"size": 8},
-                hoverongaps=False,
-                colorbar=dict(title="r", thickness=12),
-            ))
-            fig_c.update_layout(
-                height=max(360, len(c_labels) * 25 + 80),
-                template="plotly_dark",
-                plot_bgcolor="#0e1117",
-                paper_bgcolor="#0e1117",
-                margin=dict(l=10, r=10, t=10, b=10),
-                xaxis=dict(showgrid=False, tickangle=-60),
-                yaxis=dict(showgrid=False, autorange="reversed"),
-            )
-            st.plotly_chart(fig_c, use_container_width=True)
+        fig_c = go.Figure(go.Heatmap(
+            z=corr.values.tolist(),
+            x=c_labels,
+            y=c_labels,
+            colorscale="RdBu_r",
+            zmin=-1, zmax=1,
+            text=text_c,
+            texttemplate="%{text}",
+            textfont={"size": 10},
+            hoverongaps=False,
+            colorbar=dict(title="r", thickness=16),
+        ))
+        fig_c.update_layout(
+            height=len(c_labels) * 38 + 80,
+            template="plotly_dark",
+            plot_bgcolor="#0e1117",
+            paper_bgcolor="#0e1117",
+            margin=dict(l=10, r=10, t=10, b=60),
+            xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=11)),
+            yaxis=dict(showgrid=False, autorange="reversed", tickfont=dict(size=11)),
+        )
+        st.plotly_chart(fig_c, use_container_width=True)
