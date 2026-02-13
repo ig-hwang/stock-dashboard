@@ -334,39 +334,205 @@ with tabs[-1]:
 
         st.divider()
 
-        # ── 3. 상관관계 매트릭스 ──────────────────────────────────────────────
-        st.subheader("🔗 상관관계 매트릭스")
-        st.caption("일간 수익률 기준 · 카테고리 정렬 · |r|≥0.5 셀만 수치 표시")
+        # ── 3. 상관관계 분석 ───────────────────────────────────────────────────
+        st.subheader("🔗 상관관계 분석")
 
-        ret  = df_hm[avail_cat].pct_change().dropna(how="all")
-        corr = ret.corr().loc[avail_cat, avail_cat]
-        c_labels = [MACRO_LABELS.get(c, c) for c in avail_cat]
+        ret_full   = df_hm[avail_cat].pct_change().dropna(how="all")
+        ret_recent = ret_full.iloc[-60:]   # 최근 60일 (약 2개월)
+        corr_full   = ret_full.corr().loc[avail_cat, avail_cat]
+        corr_recent = ret_recent.corr().loc[avail_cat, avail_cat]
+        corr_delta  = corr_recent - corr_full
+        c_labels    = [MACRO_LABELS.get(c, c) for c in avail_cat]
 
-        text_c = [
-            [f"{corr.iloc[i, j]:.2f}" if abs(corr.iloc[i, j]) >= 0.5 else ""
+        def _safe_corr(mat, k1, k2):
+            try:
+                return float(mat.loc[k1, k2])
+            except Exception:
+                return None
+
+        # ── ① 전체 기간 매트릭스 ─────────────────────────────────────────────
+        st.markdown("**① 전체 기간 상관관계** (2년 일간 수익률 기준 · |r|≥0.5만 수치 표시)")
+        st.caption("빨강=양의 상관(같이 움직임) · 파랑=음의 상관(반대로 움직임)")
+
+        text_full = [
+            [f"{corr_full.iloc[i,j]:.2f}" if abs(corr_full.iloc[i,j]) >= 0.5 else ""
              for j in range(len(avail_cat))]
             for i in range(len(avail_cat))
         ]
-
-        fig_c = go.Figure(go.Heatmap(
-            z=corr.values.tolist(),
-            x=c_labels,
-            y=c_labels,
-            colorscale="RdBu_r",
-            zmin=-1, zmax=1,
-            text=text_c,
-            texttemplate="%{text}",
-            textfont={"size": 10},
-            hoverongaps=False,
-            colorbar=dict(title="r", thickness=16),
+        fig_full = go.Figure(go.Heatmap(
+            z=corr_full.values.tolist(), x=c_labels, y=c_labels,
+            colorscale="RdBu_r", zmin=-1, zmax=1,
+            text=text_full, texttemplate="%{text}", textfont={"size": 10},
+            hoverongaps=False, colorbar=dict(title="r", thickness=16),
         ))
-        fig_c.update_layout(
+        fig_full.update_layout(
             height=len(c_labels) * 38 + 80,
-            template="plotly_dark",
-            plot_bgcolor="#0e1117",
-            paper_bgcolor="#0e1117",
+            template="plotly_dark", plot_bgcolor="#0e1117", paper_bgcolor="#0e1117",
             margin=dict(l=10, r=10, t=10, b=60),
             xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=11)),
             yaxis=dict(showgrid=False, autorange="reversed", tickfont=dict(size=11)),
         )
-        st.plotly_chart(fig_c, use_container_width=True)
+        st.plotly_chart(fig_full, use_container_width=True)
+
+        # ── ② 최근 60일 vs 전체 기간 Δr 히트맵 ──────────────────────────────
+        st.markdown("**② 상관관계 변화 (최근 60일 − 전체 기간)**")
+        st.caption("🔴 빨강: 최근 동조화 강해짐 → 분산 효과 약화, 시장 전체가 같은 방향  |  🔵 파랑: 최근 분산 효과 커짐 → 헤지 관계 강화  |  |Δr|≥0.15만 수치 표시")
+
+        text_delta = [
+            [f"{corr_delta.iloc[i,j]:+.2f}" if abs(corr_delta.iloc[i,j]) >= 0.15 else ""
+             for j in range(len(avail_cat))]
+            for i in range(len(avail_cat))
+        ]
+        fig_delta = go.Figure(go.Heatmap(
+            z=corr_delta.values.tolist(), x=c_labels, y=c_labels,
+            colorscale="RdBu_r", zmid=0, zmin=-0.6, zmax=0.6,
+            text=text_delta, texttemplate="%{text}", textfont={"size": 10},
+            hoverongaps=False, colorbar=dict(title="Δr", thickness=16),
+        ))
+        fig_delta.update_layout(
+            height=len(c_labels) * 38 + 80,
+            template="plotly_dark", plot_bgcolor="#0e1117", paper_bgcolor="#0e1117",
+            margin=dict(l=10, r=10, t=10, b=60),
+            xaxis=dict(showgrid=False, tickangle=-45, tickfont=dict(size=11)),
+            yaxis=dict(showgrid=False, autorange="reversed", tickfont=dict(size=11)),
+        )
+        st.plotly_chart(fig_delta, use_container_width=True)
+
+        # ── ③ 주요 페어 60일 롤링 상관관계 ──────────────────────────────────
+        st.markdown("**③ 주요 페어 60일 롤링 상관관계 추이**")
+        st.caption("상관관계가 시간에 따라 어떻게 변해왔는지 · 현재값이 역사적 범위에서 어디에 있는지 확인")
+
+        KEY_PAIRS = [
+            ("SP500",  "Bitcoin", "S&P500↔BTC",    "#f57c00"),
+            ("SP500",  "Gold",    "S&P500↔금",      "#ffd54f"),
+            ("DXY",    "Gold",    "달러↔금",         "#26a69a"),
+            ("US10Y",  "SP500",   "미국금리↔S&P500", "#ef5350"),
+            ("KOSPI",  "SP500",   "KOSPI↔S&P500",   "#42a5f5"),
+            ("SP500",  "VIX",     "S&P500↔VIX",     "#ab47bc"),
+        ]
+        fig_roll = go.Figure()
+        for k1, k2, label, color in KEY_PAIRS:
+            if k1 not in ret_full.columns or k2 not in ret_full.columns:
+                continue
+            rc = ret_full[k1].rolling(60).corr(ret_full[k2]).dropna()
+            if rc.empty:
+                continue
+            # 현재값 강조 마커
+            fig_roll.add_trace(go.Scatter(
+                x=rc.index, y=rc.values, name=label,
+                line=dict(color=color, width=2),
+                hovertemplate=f"{label}: %{{y:.2f}}<extra></extra>",
+            ))
+            fig_roll.add_trace(go.Scatter(
+                x=[rc.index[-1]], y=[rc.iloc[-1]],
+                mode="markers", marker=dict(color=color, size=9, symbol="circle"),
+                showlegend=False,
+                hovertemplate=f"{label} 현재: %{{y:.2f}}<extra></extra>",
+            ))
+
+        fig_roll.add_hline(y=0,    line_dash="dash", line_color="rgba(255,255,255,0.25)", line_width=1)
+        fig_roll.add_hline(y=0.7,  line_dash="dot",  line_color="rgba(239,83,80,0.4)",   line_width=1)
+        fig_roll.add_hline(y=-0.7, line_dash="dot",  line_color="rgba(66,165,245,0.4)",  line_width=1)
+        fig_roll.add_annotation(x=ret_full.index[-1], y=0.72,  text="강한 양의 상관 (0.7)", showarrow=False, font=dict(size=10, color="#ef5350"), xanchor="right")
+        fig_roll.add_annotation(x=ret_full.index[-1], y=-0.72, text="강한 음의 상관 (-0.7)", showarrow=False, font=dict(size=10, color="#42a5f5"), xanchor="right")
+
+        fig_roll.update_layout(
+            height=480,
+            template="plotly_dark", plot_bgcolor="#0e1117", paper_bgcolor="#0e1117",
+            margin=dict(l=10, r=10, t=30, b=10),
+            yaxis=dict(title="상관계수 (r)", range=[-1.05, 1.05],
+                       gridcolor="#1e2130", gridwidth=0.5, tickfont=dict(size=11)),
+            xaxis=dict(showgrid=False, tickfont=dict(size=11)),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            hovermode="x unified",
+        )
+        st.plotly_chart(fig_roll, use_container_width=True)
+
+        # ── ④ 자동 인사이트 카드 ─────────────────────────────────────────────
+        st.markdown("**④ 현재 시장 상황 인사이트** (최근 60일 기준 자동 분석)")
+
+        insights = []
+
+        # Risk-on / Risk-off
+        sp_btc = _safe_corr(corr_recent, "SP500", "Bitcoin")
+        if sp_btc is not None:
+            if sp_btc > 0.6:
+                insights.append(("⚠️ Risk-Off 환경",
+                    f"S&P500↔BTC 상관계수 **{sp_btc:.2f}** — 비트코인이 주식과 동조화. "
+                    "시장 전반 위험회피 국면에서 BTC의 분산 효과가 낮음."))
+            elif sp_btc < 0.2:
+                insights.append(("✅ BTC 독립성 확보",
+                    f"S&P500↔BTC 상관계수 **{sp_btc:.2f}** — 비트코인이 주식과 독립적으로 움직임. "
+                    "BTC의 포트폴리오 분산 효과 유효."))
+
+        # Gold hedge
+        sp_gold = _safe_corr(corr_recent, "SP500", "Gold")
+        if sp_gold is not None:
+            if sp_gold < -0.3:
+                insights.append(("🛡️ 금 헤지 효과 유효",
+                    f"S&P500↔금 상관계수 **{sp_gold:.2f}** — 주식 하락 시 금 상승 패턴 작동 중. "
+                    "안전자산으로서 금의 역할 유효."))
+            elif sp_gold > 0.4:
+                insights.append(("⚠️ 금 안전자산 기능 약화",
+                    f"S&P500↔금 상관계수 **{sp_gold:.2f}** — 금이 주식과 같이 움직임. "
+                    "인플레이션 헤지 수요 또는 유동성 장세일 가능성."))
+
+        # Dollar vs Gold
+        dxy_gold = _safe_corr(corr_recent, "DXY", "Gold")
+        if dxy_gold is not None:
+            if dxy_gold < -0.4:
+                insights.append(("💱 달러↔금 역관계 유지",
+                    f"DXY↔금 상관계수 **{dxy_gold:.2f}** — 달러 강세 시 금 약세 패턴 지속. "
+                    "달러 방향이 금값의 핵심 변수."))
+            elif dxy_gold > 0.2:
+                insights.append(("💱 달러↔금 관계 이상",
+                    f"DXY↔금 상관계수 **{dxy_gold:.2f}** — 이례적으로 달러와 금이 동반 상승. "
+                    "지정학 리스크 또는 스태그플레이션 우려 가능성."))
+
+        # Korea-US decoupling
+        kr_sp = _safe_corr(corr_recent, "KOSPI", "SP500")
+        if kr_sp is not None:
+            if kr_sp > 0.7:
+                insights.append(("🌏 한·미 증시 강한 동조화",
+                    f"KOSPI↔S&P500 상관계수 **{kr_sp:.2f}** — 미국 시장 방향이 한국 증시에 강하게 전달. "
+                    "미국 이벤트 리스크에 한국 증시도 민감하게 반응."))
+            elif kr_sp < 0.3:
+                insights.append(("🌏 한·미 증시 탈동조화",
+                    f"KOSPI↔S&P500 상관계수 **{kr_sp:.2f}** — 한국 증시가 미국과 독립적으로 움직이는 구간. "
+                    "국내 고유 요인(환율, 반도체 업황 등) 주목."))
+
+        # Rates vs Stocks
+        r_sp = _safe_corr(corr_recent, "US10Y", "SP500")
+        if r_sp is not None:
+            if r_sp < -0.3:
+                insights.append(("📉 금리↔주식 역관계",
+                    f"미국10년물↔S&P500 상관계수 **{r_sp:.2f}** — 금리 상승이 주식에 부담. "
+                    "전통적인 채권-주식 역관계 작동 중."))
+            elif r_sp > 0.3:
+                insights.append(("📈 금리↔주식 동반 상승",
+                    f"미국10년물↔S&P500 상관계수 **{r_sp:.2f}** — 금리와 주식이 같이 상승. "
+                    "경기 기대감이 인플레 우려를 상쇄하는 구간."))
+
+        # 가장 큰 상관관계 변화 포착
+        big = []
+        for i, k1 in enumerate(avail_cat):
+            for j, k2 in enumerate(avail_cat):
+                if j <= i:
+                    continue
+                d = corr_delta.iloc[i, j]
+                if abs(d) >= 0.25:
+                    big.append((abs(d), d, MACRO_LABELS.get(k1, k1), MACRO_LABELS.get(k2, k2)))
+        big.sort(reverse=True)
+        for _, d, l1, l2 in big[:2]:
+            direction = "급격히 높아짐 (동조화 강화)" if d > 0 else "급격히 낮아짐 (분산 효과 강화)"
+            insights.append((f"⚡ 상관관계 급변: {l1}↔{l2}",
+                f"장기 대비 최근 60일 상관계수 **{d:+.2f}** — {direction}."))
+
+        if insights:
+            for i in range(0, len(insights), 2):
+                cols_ins = st.columns(2)
+                for j, (title, body) in enumerate(insights[i:i+2]):
+                    with cols_ins[j]:
+                        st.info(f"**{title}**\n\n{body}")
+        else:
+            st.info("현재 특이한 상관관계 패턴이 감지되지 않았습니다.")
