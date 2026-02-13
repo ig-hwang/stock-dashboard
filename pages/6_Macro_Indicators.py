@@ -100,9 +100,9 @@ st.divider()
 
 # ── 탭별 차트 ─────────────────────────────────────────────────────────────────
 
-tabs = st.tabs(list(GROUPS.keys()))
+tabs = st.tabs(list(GROUPS.keys()) + ["🗓️ 히트맵"])
 
-for tab, (group_name, keys) in zip(tabs, GROUPS.items()):
+for tab, (group_name, keys) in zip(tabs[:-1], GROUPS.items()):
     with tab:
         # 현재 기간에 존재하는 시리즈만 필터
         avail = [k for k in keys if k in df.columns and df[k].dropna().shape[0] > 1]
@@ -217,3 +217,92 @@ for tab, (group_name, keys) in zip(tabs, GROUPS.items()):
             .set_properties(subset=["지표", "최신값"], **{"text-align": "left"})
         )
         st.dataframe(styled, use_container_width=True, hide_index=True)
+
+# ── 히트맵 탭 ─────────────────────────────────────────────────────────────────
+
+with tabs[-1]:
+    # 히트맵은 항상 2년치 데이터 사용 (월별 분석에 최소 12개월 필요)
+    df_hm = load_macro_data(days=730)
+
+    if df_hm is None or df_hm.empty:
+        st.info("데이터 없음.")
+    else:
+        # ── 월별 수익률 히트맵 ────────────────────────────────────────────────
+        st.subheader("월별 수익률 (%)")
+
+        monthly     = df_hm.resample("ME").last()
+        monthly_ret = (monthly.pct_change() * 100).iloc[1:]          # 첫 행 NaN 제거
+        valid_cols  = [c for c in monthly_ret.columns
+                       if monthly_ret[c].notna().sum() >= 3]
+        monthly_ret = monthly_ret[valid_cols]
+
+        y_labels  = [MACRO_LABELS.get(c, c) for c in monthly_ret.columns]
+        x_labels  = [d.strftime("%y/%m") for d in monthly_ret.index]
+        z_monthly = monthly_ret.T.values.tolist()
+        text_m    = [
+            [f"{v:+.1f}" if pd.notna(v) else "" for v in row]
+            for row in monthly_ret.T.values
+        ]
+
+        fig_m = go.Figure(go.Heatmap(
+            z=z_monthly,
+            x=x_labels,
+            y=y_labels,
+            colorscale="RdYlGn",
+            zmid=0,
+            text=text_m,
+            texttemplate="%{text}",
+            textfont={"size": 8},
+            hoverongaps=False,
+            colorbar=dict(title="(%)", thickness=14, len=0.9),
+        ))
+        fig_m.update_layout(
+            height=max(360, len(y_labels) * 28 + 60),
+            template="plotly_dark",
+            plot_bgcolor="#0e1117",
+            paper_bgcolor="#0e1117",
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis=dict(showgrid=False, tickangle=-45),
+            yaxis=dict(showgrid=False),
+        )
+        st.plotly_chart(fig_m, use_container_width=True)
+
+        # ── 상관관계 히트맵 ───────────────────────────────────────────────────
+        st.subheader("상관관계 매트릭스 (일간 수익률 기준)")
+
+        ret  = df_hm.pct_change().dropna(how="all")
+        corr = ret.corr()
+        c_labels = [MACRO_LABELS.get(c, c) for c in corr.columns]
+
+        # 상삼각 마스크 (하삼각 + 대각선만 표시)
+        import numpy as np
+        mask  = np.triu(np.ones(corr.shape, dtype=bool), k=1)
+        z_corr = corr.where(~mask).values.tolist()
+        text_c = [
+            [f"{v:.2f}" if pd.notna(v) else "" for v in row]
+            for row in corr.where(~mask).values
+        ]
+
+        fig_c = go.Figure(go.Heatmap(
+            z=z_corr,
+            x=c_labels,
+            y=c_labels,
+            colorscale="RdBu_r",
+            zmin=-1, zmax=1,
+            text=text_c,
+            texttemplate="%{text}",
+            textfont={"size": 8},
+            hoverongaps=False,
+            colorbar=dict(title="r", thickness=14),
+        ))
+        n = len(c_labels)
+        fig_c.update_layout(
+            height=max(420, n * 30 + 80),
+            template="plotly_dark",
+            plot_bgcolor="#0e1117",
+            paper_bgcolor="#0e1117",
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis=dict(showgrid=False, tickangle=-45),
+            yaxis=dict(showgrid=False, autorange="reversed"),
+        )
+        st.plotly_chart(fig_c, use_container_width=True)
