@@ -56,7 +56,7 @@ SYMBOL_NAMES = {
     # 글로벌 (US 거래소 상장)
     "TSM": "TSMC",
     "ASML": "ASML",
-    "ABB": "ABB",
+    "ABBNY": "ABB",
     # 한국
     "267260.KS": "HD현대일렉트릭",
     "034020.KS": "두산에너빌리티",
@@ -84,7 +84,7 @@ SYMBOL_CATEGORY = {
     # 반도체/소재
     "AMD": "US", "MU": "US", "AMAT": "US", "MP": "US",
     # 글로벌 (US 거래소 상장)
-    "TSM": "US", "ASML": "US", "ABB": "US",
+    "TSM": "US", "ASML": "US", "ABBNY": "US",
     # 한국
     "267260.KS": "KR", "034020.KS": "KR", "028260.KS": "KR",
     "267270.KS": "KR", "010120.KS": "KR",
