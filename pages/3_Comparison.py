@@ -149,8 +149,19 @@ st.subheader("주요 지표 비교")
 ind_records = []
 for sym in selected:
     ov = ov_map.get(sym, {})
-    sigs = detect_signals(ov) if ov else {}
-    overall, score = compute_overall_signal(sigs) if sigs else ("중립", 0)
+
+    # `if ov` on a pd.Series raises ValueError (ambiguous truth value)
+    # → use isinstance() instead
+    if isinstance(ov, pd.Series):
+        # detect_signals expects "close", but load_overview_data aliases it as "price"
+        ov_sig = ov.copy()
+        if "close" not in ov_sig.index and "price" in ov_sig.index:
+            ov_sig["close"] = ov_sig["price"]
+        sigs = detect_signals(ov_sig)
+    else:
+        sigs = {}
+
+    overall, score = compute_overall_signal(sigs)
 
     rsi_v  = ov.get("rsi_14")
     sma200 = ov.get("sma_200")
@@ -158,27 +169,40 @@ for sym in selected:
     macd   = ov.get("macd")
     macd_s = ov.get("macd_signal")
 
+    # Pre-format as strings — avoids Styler .format() + NaN → ValueError
+    rsi_str = f"{float(rsi_v):.1f}" if pd.notna(rsi_v) else "—"
+    sma_str = (
+        f"{(float(price) / float(sma200) - 1) * 100:+.1f}%"
+        if pd.notna(price) and pd.notna(sma200) and float(sma200) != 0
+        else "—"
+    )
+    macd_str = (
+        "강세"
+        if pd.notna(macd) and pd.notna(macd_s) and float(macd) > float(macd_s)
+        else "약세"
+    )
+
     ind_records.append({
-        "종목":       sym,
-        "회사명":      SYMBOL_NAMES.get(sym, sym),
-        "RSI":        round(rsi_v, 1) if pd.notna(rsi_v) else None,
-        "vs SMA200":  f"{(price/sma200-1)*100:+.1f}%" if pd.notna(price) and pd.notna(sma200) and sma200 else "—",
-        "MACD":       "강세" if (pd.notna(macd) and pd.notna(macd_s) and macd > macd_s) else "약세",
-        "종합 신호":   overall,
-        "신호 점수":   round(score, 2),
+        "종목":      sym,
+        "회사명":     SYMBOL_NAMES.get(sym, sym),
+        "RSI":       rsi_str,
+        "vs SMA200": sma_str,
+        "MACD":      macd_str,
+        "종합 신호":  overall,
+        "신호 점수":  round(float(score), 2),
     })
 
 ind_df = pd.DataFrame(ind_records)
+
 
 def _signal_color(val):
     m = {"강력매수": "color:#a5d6a7;font-weight:bold", "매수": "color:#c8e6c9",
          "중립": "color:#b0bec5", "매도": "color:#ffcdd2", "강력매도": "color:#ef9a9a;font-weight:bold"}
     return m.get(val, "")
 
+
 st.dataframe(
-    ind_df.style
-    .map(_signal_color, subset=["종합 신호"])
-    .format({"RSI": lambda v: f"{v:.1f}" if pd.notna(v) else "—"}),
+    ind_df.style.map(_signal_color, subset=["종합 신호"]),
     use_container_width=True, hide_index=True,
 )
 

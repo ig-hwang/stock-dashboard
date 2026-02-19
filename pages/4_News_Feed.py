@@ -103,8 +103,12 @@ def _render_article(row):
     pub    = row["published"].strftime("%H:%M") if pd.notna(row["published"]) else ""
     source = row.get("source") or ""
     sentiment = row.get("sentiment") or ""
-    ai_text   = row.get("ai_summary") or ""
-    raw_sum   = row.get("summary") or ""
+    # `NaN or ""` returns NaN (NaN is truthy) → str.split() would raise AttributeError
+    # Use pd.notna() to safely handle NULL/NaN values from the DB
+    _ai = row.get("ai_summary")
+    ai_text = str(_ai) if pd.notna(_ai) and _ai else ""
+    _rs = row.get("summary")
+    raw_sum = str(_rs) if pd.notna(_rs) and _rs else ""
 
     sym_badge = (
         f'<span style="background:#1e3a5f;color:#90caf9;padding:2px 7px;'
