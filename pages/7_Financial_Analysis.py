@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from db import get_engine, ALL_SYMBOLS, SYMBOL_NAMES, SYMBOL_CATEGORIES
+from db import get_engine, ALL_SYMBOLS, SYMBOL_NAMES, SYMBOL_CATEGORY
 
 st.set_page_config(page_title="Financial Analysis", page_icon="📊", layout="wide")
 

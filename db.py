@@ -57,6 +57,8 @@ SYMBOL_NAMES = {
     "TSM": "TSMC",
     "ASML": "ASML",
     "ABBNY": "ABB",
+    # 신규
+    "UBER": "Uber",
     # 한국
     "267260.KS": "HD현대일렉트릭",
     "034020.KS": "두산에너빌리티",
@@ -85,6 +87,8 @@ SYMBOL_CATEGORY = {
     "AMD": "US", "MU": "US", "AMAT": "US", "MP": "US",
     # 글로벌 (US 거래소 상장)
     "TSM": "US", "ASML": "US", "ABBNY": "US",
+    # 신규
+    "UBER": "US",
     # 한국
     "267260.KS": "KR", "034020.KS": "KR", "028260.KS": "KR",
     "267270.KS": "KR", "010120.KS": "KR",
