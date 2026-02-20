@@ -563,7 +563,7 @@ if not df_prices.empty:
     # Stock price
     fig_corr.add_trace(
         go.Scatter(x=df_prices['trade_date'], y=df_prices['close'],
-                   name="Stock Price", line=dict(color='black', width=2)),
+                   name="Stock Price", line=dict(color='#FF6B35', width=3)),
         secondary_y=False
     )
 
